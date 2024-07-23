@@ -395,40 +395,114 @@ mod7 = glm(tested ~ speakOtherLanguagesPropBG + houseValueMedianBG, data = imput
 summary(mod7)
 ```
 
-Week 6 + 7: 
+Week 6 + 7: Lasso for Variables
 ```{r}
 library(glmnet)
 
+num_col = sapply(imputeDF, is.numeric)
+numdata = imputeDF[, num_col]
+numdata[is.na(numdata)] = 0 
 
-y = as.numeric(imputeDF$tested) - 1
+X = as.matrix(numdata)
+y = imputeDF$tested
 
-x = model.matrix(tested ~ . - 1, data = imputeDF)
+lasso_model = cv.glmnet(X, y, family = "binomial", alpha = 1)
 
-lasso_model = cv.glmnet(x, y, alpha = 1, family = "binomial")
+best_lambda = lasso_model$lambda.min
 
-print(lasso_model)
+final_model = glmnet(X, y, family = "binomial", alpha = 1, lambda = best_lambda)
 
-## Coefficients at the optimal lambda
-#lasso_coef <- coef(lasso_model, s = "lambda.min")
-#print(lasso_coef)
+lasso_coefficients = coef(final_model)
 
-# Plot the cross-validation results
-#plot(lasso_model)
+lasso_df = as.data.frame(as.matrix(lasso_coefficients))
+colnames(lasso_df) = c("Coefficient")
 
+sig_vars = lasso_df[lasso_df$Coefficient != 0, , drop = FALSE]
+sig_vars$Variable = rownames(sig_vars)
+sig_vars = sig_vars[order(abs(sig_vars$Coefficient), decreasing = TRUE), ]
 ```
 
+After lasso,from imputeDF, i took variables that had to do with race, education, and housing
 
+race_vars = c("propWhiteBlockPop", "propAsianBlockPop", "propBlackBlockPop", 
+               "propHispanicBlockPop", "propAianBlockPop", "aianPropBG", 
+               "blackPropBG", "whitePropBG", "asianPropBG", "hispanicPropBG")
 
+education_vars = c("educationDoctoratePropBG", "educationPrfsnlSchoolPropBG", 
+                    "educationSomeCollegeLess1PropBG", "educationMastersPropBG", 
+                    "educationAssociatesPropBG", "educationHSPropBG", 
+                    "educationSomeCollegeMore1PropBG", "educationBachelorsPropBG", 
+                    "educationGEDPropBG")
 
+housing_vars = c("pRenterOccupiedHousesBG", "pOwnerOccupiedHousesBG", 
+                  "pLackingCompletePlumbingBG", "pVacantHousesBG", 
+                  "pCompletePlumbingFacilitiesBG", "medianBuildingAgeBG", 
+                  "numHousingUnitsBG", "houseValueLowerQBG", "houseValueUpperQBG", 
+                  "houseValueMedianBG", "pOccupiedHousesBG")
+                  
+RACE
+```{r}
+race_vars = c("propWhiteBlockPop", "propAsianBlockPop", "propBlackBlockPop", 
+               "propHispanicBlockPop", "propAianBlockPop")
 
+log_reg_func = function(data, vars, outcome) {
+  funcy_funct = as.formula(paste(outcome, "~", paste(vars, collapse = " + ")))
+  mod_log_fun = glm(funcy_funct, data = data, family = binomial)
+  summary(mod_log_fun)
+}
 
+for (var in race_vars) {
+  cat("Log Regression Summary for", var, ":\n")
+  print(log_reg_func(imputeDF, var, "tested"))
+  cat("\n\n")
+}
+```
 
+Education
+```{r}
+education_vars = c("educationDoctoratePropBG", "educationPrfsnlSchoolPropBG", 
+                    "educationSomeCollegeLess1PropBG", "educationMastersPropBG", 
+                    "educationAssociatesPropBG", "educationHSPropBG", 
+                    "educationSomeCollegeMore1PropBG", "educationBachelorsPropBG", 
+                    "educationGEDPropBG")
 
+log_reg_func = function(data, vars, outcome) {
+  funcy_funct = as.formula(paste(outcome, "~", paste(vars, collapse = " + ")))
+  mod_log_fun = glm(funcy_funct, data = data, family = binomial)
+  summary(mod_log_fun)
+}
 
+for (var in education_vars) {
+  cat("Log Regression Summary for", var, ":\n")
+  print(log_reg_func(imputeDF, var, "tested"))
+  cat("\n")
+}
+```
+doctoral and ged
 
+Housing
+```{r}
+housing_vars = c("pRenterOccupiedHousesBG", "pOwnerOccupiedHousesBG", 
+                  "pLackingCompletePlumbingBG", "pVacantHousesBG", 
+                  "pCompletePlumbingFacilitiesBG", "medianBuildingAgeBG", 
+                  "numHousingUnitsBG", "houseValueLowerQBG", "houseValueUpperQBG", 
+                  "houseValueMedianBG", "pOccupiedHousesBG")
 
+log_reg_func = function(data, vars, outcome) {
+  funcy_funct = as.formula(paste(outcome, "~", paste(vars, collapse = " + ")))
+  mod_log_fun = glm(funcy_funct, data = data, family = binomial)
+  summary(mod_log_fun)
+}
 
+for (var in housing_vars) {
+  cat("Log Regression Summary for", var, ":\n")
+  print(log_reg_func(imputeDF, var, "tested"))
+  cat("\n")
+}
+```
+income and median 
 
-
+Linear models to see how income levels and education affects testing
+also see how income and median household values are intertwined
 
 
