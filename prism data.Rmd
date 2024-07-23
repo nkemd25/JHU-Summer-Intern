@@ -1,0 +1,434 @@
+
+libraries
+```{r}
+library('prism')
+library('ggplot2')
+library('ggeffects')
+library('dplyr')
+library('raster')
+library('lubridate')
+library('scales')
+library('mgcv')
+library('gratia')
+library('pROC')
+library('tidycensus')
+```
+
+prism directory
+```{r}
+prism_set_dl_dir('/Users/osinachinwosu/Desktop/TMAX')
+```
+
+loading lead_data
+```{r}
+lead_data = read.csv('/Users/osinachinwosu/Desktop/JHU_Intern/leadExposure_final.csv')
+```
+
+```{r}
+lead_copy = lead_data
+unique_dates = unique(lead_copy$Date.Sampled) #12234 unique dates
+lead_copy
+```
+
+```{r}
+lead_copy$Date = lapply(lead_copy$Date.Sampled, as.Date)
+lead_copy$Date = as.Date(unlist(lead_copy$Date))
+
+distinct(lead_copy)
+```
+
+prism download
+```{r}
+#for (dt in lead_copy$Date) {
+#    get_prism_dailys(type = "tmax", dates = dt)
+#}
+
+```
+
+creating table + merging 
+```{r}
+mx_df = data.frame(Date.Sampled = character(), cxy_lon = double(), cxy_lat = double(), tmax = double(), first_draw = double(), second_draw = double(), third_draw = double(), Address = character(), cxy_block_id = integer())
+
+for (i in 1:nrow(lead_copy)) {
+    date2 = lead_copy$Date[i]
+    proper_date = format(date2, '%Y%m%d')
+    longitude = lead_copy$cxy_lon[i]
+    latitude = lead_copy$cxy_lat[i]
+    draw_1 = lead_copy$X1st.Draw[i]
+    draw_2 = lead_copy$X2.3.Minute[i]
+    draw_3 = lead_copy$X5.Minute[i]
+    address = lead_copy$Address[i]
+    block = lead_copy$cxy_block_id[i]
+    
+    file_labels = prism_archive_ls()
+    file_labels = file_labels[grep(proper_date, file_labels)] 
+    if (length(file_labels) > 0) {
+      prism_file = pd_to_file(file_labels)
+      if (file.exists(prism_file)) {
+        raster_file = raster(prism_file)
+        temp_C = extract(raster_file, matrix(c(longitude, latitude), ncol = 2))
+        temp = if (!is.na(temp_C)) {
+          temp_C
+              } else {
+                NA
+                }
+mx_df = rbind(mx_df, data.frame(Date.Sampled = date2, cxy_lon = longitude, cxy_lat = latitude, tmax = temp, X1st.Draw = draw_1, X2.3.Minute = draw_2, X5.Minute = draw_3, Address = address, cxy_block_id = block))
+        }
+    }
+}
+
+```
+
+```{r}
+merged_mx = distinct(left_join(lead_copy, max_df, by = c("Address", "cxy_lon", "cxy_lat", "X1st.Draw", "X2.3.Minute", "X5.Minute", 'Date')))
+lead_copy = distinct(lead_copy)
+```
+
+LOG LM'S + GRAPHS (Week 3 - 4)
+```{r}
+ggplot(merged_mx, aes(x = Date.Sampled, y = tmax)) +
+  geom_line() +
+  labs(title = "Temperature Over Time",
+       x = "Date",
+       y = "Average Temperature (°C)")
+```
+
+```{r}
+# Outliers Included
+draw_temp_1 = ggplot(merged_mx, aes(x = log(tmax), y = X1st.Draw)) +
+  geom_point() +
+  labs(title = "Temperature vs 1st Draw Lead Concentration",
+       x = "Log Average Temperature (°C)",
+       y = "1st Draw Lead Concentration")
+
+draw_temp_23 = ggplot(merged_mx, aes(x = log(tmax), y = X2.3.Minute)) +
+  geom_point() +
+  labs(title = "Temperature vs 2nd Draw Lead Concentration",
+       x = "Log Average Temperature (°C)",
+       y = "2nd Draw Lead Concentration After 2-3 Minutes")
+
+draw_temp_5 = ggplot(merged_mx, aes(x = log(tmax), y = X5.Minute)) +
+  geom_point() +
+  labs(title = "Temperature vs 3rd Draw Lead Concentration",
+       x = "Log Average Temperature (°C)",
+       y = "3rd Draw Lead Concentration After 5 Minutes")
+
+
+draw_temp_1
+draw_temp_23
+draw_temp_5
+```
+
+```{r}
+#Outlier Removal Function
+orm2 = function(df, column) {
+  quartiles = quantile(df[[column]], probs = c(0.25,0.75), na.rm=TRUE)
+  IQR = IQR(df[[column]])
+  lower = quartiles[1] - 1.5*IQR
+  upper = quartiles[2] + 1.5*IQR
+  noout_df2 = subset(df, df[[column]] < upper)
+  return(noout_df2)
+}
+```
+
+lead vs temp graphs
+```{r}
+draw1_noouts = orm2(merged_mx, "X1st.Draw")
+draw2_noouts = orm2(merged_mx, "X2.3.Minute")
+draw3_noouts = orm2(merged_mx, "X5.Minute")
+
+g_draw1 =  ggplot(draw1_noouts, aes(x = log(tmax), y = X1st.Draw)) +
+  geom_point(alpha = .5) +
+  labs(title = "Temperature vs 1st Draw Lead Concentration (No Outliers)",
+       x = "Log Average Temperature (°C)",
+       y = "1st Draw Lead Concentration")
+
+g_draw23 = ggplot(draw2_noouts, aes(x = log(tmax), y = X2.3.Minute)) +
+  geom_point(alpha = .5) +
+  labs(title = "Temperature vs 2nd Draw Lead Concentration (No Outliers)",
+       x = "Log Average Temperature (°C)",
+       y = "2nd Draw Lead Concentration After 2-3 Minutes")
+
+g_draw5 = ggplot(draw3_noouts, aes(x = log(tmax), y = X5.Minute)) +
+  geom_point(alpha = .5) +
+  labs(title = "Temperature vs 3rd Draw Lead Concentration (No Outliers)",
+       x = "Log Average Temperature (°C)",
+       y = "3rd Draw Lead Concentration After 5 Minutes")
+
+g_draw1
+g_draw23
+g_draw5
+```
+
+LM
+```{r}
+summary(lm(X1st.Draw ~ tmax, data = merged_mx))
+
+summary(lm(X1st.Draw ~ CA, data = merged_mx))
+```
+
+```{r}
+summary(lm(X2.3.Minute ~ tmax, data = merged_mx))
+
+summary(lm(X2.3.Minute ~ CA, data = merged_mx))
+```
+
+```{r}
+summary(lm(X5.Minute ~ tmax, data = merged_mx))
+
+summary(lm(X5.Minute ~ CA, data = merged_mx))
+```
+
+GAM MD + GRAPHS (Week 4)
+```{r}
+lm_ca_mx = lm(X1st.Draw ~ as.factor(CA) + tmax, data = merged_mx)
+summary(lm_ca_mx)
+plot(lm_ca_mx)
+```
+
+```{r}
+merged_mx
+```
+
+```{r}
+mod_gam1 = gam(X1st.Draw ~ as.factor(CA) + s(tmax), data = merged_mx)
+summary(mod_gam1)
+plot(ggeffects::ggpredict(mod_gam1), facets = TRUE)
+gratia::draw(mod_gam1)
+```
+tmax seem to have a linear, positive effect, but tmax is not significant (smoothed or not). 
+and CA seems to have a nonlinear effect, significant at a 0.05 level.
+
+```{r}
+mod_gam2 = gam(X1st.Draw ~ CA + s(tmax, bs = "cr"), data = merged_mx)
+summary(mod_gam2)
+plot(ggeffects::ggpredict(mod_gam2), facets = TRUE)
+gratia::draw(mod_gam2)
+```
+tmax and CA both seem to have a linear, positive effect, but tmax is not significant (smoothed or not), but while CA is significant at 0.1
+
+```{r}
+mod_gam3 = gam(X1st.Draw ~ s(CA) + tmax, data = merged_mx)
+summary(mod_gam3)
+plot(ggeffects::ggpredict(mod_gam3), facets = TRUE)
+gratia::draw(mod_gam3)
+```
+
+```{r}
+mod_gam3 = gam(X1st.Draw ~ CA + s(tmax) + te(CA,tmax), data = merged_mx)
+summary(mod_gam3)
+plot(ggeffects::ggpredict(mod_gam3), facets = TRUE)
+gratia::draw(mod_gam3)
+```
+
+Log regression + look into subtopics (Week 5)
+
+log_temp
+```{r}
+#took the log of tmax after adding  a constant (min of temp + 1) to each row
+merged_mx$log_temp = log(abs(min(merged_mx$tmax)) + merged_mx$tmax + 1)
+```
+
+```{r}
+merged_mx = merged_mx %>% mutate(lead_presence = ifelse(X1st.Draw > 0, ifelse(X2.3.Minute > 0, ifelse(X5.Minute > 0, 1, 0), 0), 0))
+merged_mx
+```
+
+regression
+```{r}
+log_model = glm(lead_presence ~ as.factor(CA) + log_temp, data = merged_mx, family = binomial)
+
+summary(log_model)
+```
+
+```{r}
+merged_mx_cp = merged_mx %>% mutate(predicted_prob = predict(log_model, type = "response"))
+
+ggplot(merged_mx_cp, aes(x = log_temp, y = predicted_prob)) +
+  geom_point(alpha = 0.5) +
+  labs(title = "Predicted Probabilities vs. Log Temperature",
+       x = "Log Temperature",
+       y = "Predicted Probability of Lead Presence")
+```
+
+```{r}
+roc_curve = roc(merged_mx_cp$lead_presence, merged_mx_cp$predicted_prob)
+print(paste("AUC Score:", auc(roc_curve)))
+
+plot(roc_curve, main = "ROC Curve", col = "blue")
+```
+
+
+Subtopic: Neighborhood characteristics for lead exposure
+
+```{r}
+#tidycensus for neighborhood data
+census_api_key('363eac25d9e97f2a3af1f84447e1150440c95219',install = TRUE)
+```
+
+```{r}
+merged_mx
+#look at all CAs where lead presense is 1 - log regression?
+```
+
+Census tract data (ACS)
+```{r}
+
+var_n = c(
+  speaks_only_english = 'B16001_002',
+  foreign_born_population = 'B05001_005',
+  median_home_value = 'B25077_001',
+  total_population_25_over = 'B15003_001',
+  high_school_graduate = 'B15003_017',
+  bachelors_degree = 'B15003_021',
+  masters_degree = 'B15003_022',
+  professional_school_degree = 'B15003_023',
+  doctorate_degree = 'B15003_024'
+)
+
+unique_tracts = unique(merged_mx$CensusTract)
+all_acs_data = data.frame()
+
+for (year in 2016:2022) {
+  acs_data =
+    get_acs(
+      geography = "tract",
+      variables = var_n,
+      state = "IL",
+      county = "Cook",
+      year = year,
+      survey = "acs5"
+    )
+  
+  if (!is.null(acs_data)) {
+    acs_data <- acs_data %>%
+      filter(GEOID %in% unique_tracts) %>%
+      mutate(year = year)
+    
+    all_acs_data =  bind_rows(all_acs_data, acs_data)
+  }
+}
+
+#all_acs_data_wide = all_acs_data %>%
+#  tidyr::pivot_wider(names_from = variable, values_from = estimate)
+#all_acs_data_wide
+all_acs_data_combined = all_acs_data_wide %>%
+  group_by(GEOID, NAME, year) %>%
+  summarize(across(everything(), ~max(.x,na.rm = TRUE)), .groups = 'drop')
+all_acs_data_combined
+```
+
+```{r}
+merged_mx$year = format(as.Date(merged_mx$Date, format="%d/%m/%Y"),"%Y")
+```
+
+
+```{r}
+mx_cen = merge(merged_mx, all_acs_data_combined, by.x = c('CensusTract', 'year'), by.y = c('GEOID', 'year')) # missing 2023
+
+#37739
+mx_cen_ss = subset(mx_cen, select = -c(NAME, speaks_only_english))
+
+sum(merged_mx$year == 2023)
+mx_cen_ss
+```
+
+Week 6 and 5: Continuation of Neighborhood
+```{r}
+imputeDF = read.csv('/Users/osinachinwosu/Desktop/imputeDF.csv')
+imputeDF
+```
+```{r}
+impute_merged = merge(merged_mx, imputeDF, by.x = c('CensusTract', 'CA', 'Date.Sampled','X1st.Draw','X2.3.Minute','X5.Minute'), by.y = c('censusTract', 'CA','Date.Sampled','X1st.Draw','X2.3.Minute','X5.Minute'))
+
+impute_merged = distinct(impute_merged)
+summary(impute_merged)
+```
+
+
+lOG MODEL - tested outcome (scrapped - used lasso instead)
+
+```{r}
+
+mod1 = glm(tested ~ speakOtherLanguagesPropBG + foreignBornPropBG + educationGEDPropBG + educationSomeCollegeLess1PropBG + educationSomeCollegeMore1PropBG
+ + educationAssociatesPropBG + educationBachelorsPropBG + educationMastersPropBG + educationPrfsnlSchoolPropBG + educationDoctoratePropBG, data = imputeDF, family = binomial)
+
+summary(mod1)
+vif(mod1)
+```
+
+```{r}
+mod2 = glm(tested ~ nativeBornPropBG + speakOtherLanguagesPropBG + houseValueMedianBG + educationGEDPropBG + educationSomeCollegeLess1PropBG + educationSomeCollegeMore1PropBG
+ + educationAssociatesPropBG + educationBachelorsPropBG + educationMastersPropBG + educationPrfsnlSchoolPropBG + educationDoctoratePropBG, data = imputeDF, family = binomial)
+
+summary(mod2)
+vif(mod2)
+```
+
+```{r}
+mod3 = glm(lead_presence ~ pLackingCompletePlumbingBG + speakOtherLanguagesPropBG + houseValueMedianBG, data = impute_merged, family = binomial)
+
+summary(mod3)
+```
+
+```{r}
+mod4 = glm(tested ~ pLackingCompletePlumbingBG + speakOtherLanguagesPropBG + houseValueMedianBG + educationBachelorsPropBG, data = imputeDF, family = binomial)
+
+summary(mod4)
+vif(mod4)
+```
+
+```{r}
+mod5 = glm(lead_presence ~ pLackingCompletePlumbingBG, data = impute_merged, family = binomial)
+summary(mod5)
+```
+
+```{r}
+mod6 = glm(tested ~ speakOtherLanguagesPropBG, data = imputeDF, family = binomial)
+
+summary(mod6)
+```
+
+```{r}
+mod7 = glm(tested ~ speakOtherLanguagesPropBG + houseValueMedianBG, data = imputeDF, family = binomial)
+
+summary(mod7)
+```
+
+Week 6 + 7: 
+```{r}
+library(glmnet)
+
+
+y = as.numeric(imputeDF$tested) - 1
+
+x = model.matrix(tested ~ . - 1, data = imputeDF)
+
+lasso_model = cv.glmnet(x, y, alpha = 1, family = "binomial")
+
+print(lasso_model)
+
+## Coefficients at the optimal lambda
+#lasso_coef <- coef(lasso_model, s = "lambda.min")
+#print(lasso_coef)
+
+# Plot the cross-validation results
+#plot(lasso_model)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
