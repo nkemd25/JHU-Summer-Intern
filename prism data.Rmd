@@ -504,5 +504,19 @@ income and median
 
 Linear models to see how income levels and education affects testing
 also see how income and median household values are intertwined
+- do i have access to income?
+
+```{r}
+
+```
+
+
+```{r}
+
+
+```
+
+
+
 
 
