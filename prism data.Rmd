@@ -500,23 +500,169 @@ for (var in housing_vars) {
   cat("\n")
 }
 ```
-income and median 
 
-Linear models to see how income levels and education affects testing
-also see how income and median household values are intertwined
-- do i have access to income?
+Week 7+8: Outcome + Risk model on tested regression
 
+Outcome variable - meanOutcome
+- Used these features (prenterOccupiedHousing / foreign born / speaking other languages)
+- Also checked out education (masters, bachelors, hs, ged - each individually) against meanOutcome
+
+Risk adjusted regressions - tested (outcome)
+- Checked github and saw that preds were used from riskDF, so used preds + features mentioned above
+- Also saw how education seems to influence the tested outcome 
+
+Outcome variable - OverOne_2 
+- Also used tests as observations (as in github), but looked only at differences in education levels
+
+From all:
+- As education levels increase, their coefficients for 'tested' and 'meanOutcome' decreases
+- Both the foreignbornprop (FBP) and renteroccupiedhouses (ROH) have decreasing coefficients for outcomes (meanOutcomes and overOne_2), increasing for (tested)
+
+
+BenHuynh github
 ```{r}
+riskDF = read.csv("/Users/osinachinwosu/Downloads/riskDF.csv")
+imputeDF = read.csv("/Users/osinachinwosu/Desktop/imputeDF.csv")
+imputeDF2 = imputeDF %>% select(blockPopulation,
+                                             propWhiteBlockPop,
+                                             propBlackBlockPop,
+                                             propAianBlockPop,
+                                             propAsianBlockPop,
+                                             propHispanicBlockPop,
+                                             Population,
+                                             pctW,pctB,pctA,
+                                             pctH,pctP,pctQ,
+                                             whitePropBG,blackPropBG,
+                                             aianPropBG,asianPropBG,
+                                             hispanicPropBG,
+                                             educationHSPropBG,educationGEDPropBG,
+                                             educationAssociatesPropBG,
+                                             educationBachelorsPropBG,
+                                             educationSomeCollegeLess1PropBG,
+                                             educationSomeCollegeMore1PropBG,
+                                             educationMastersPropBG,
+                                             educationPrfsnlSchoolPropBG,
+                                             educationDoctoratePropBG,blockGroup,
+                                 speakOtherLanguagesPropBG,pRenterOccupiedHousesBG, foreignBornPropBG,
+                                             censusTract,blockNum,tested,overOne_2) %>%  distinct(blockNum,.keep_all=T)
 
+#riskDF = riskDF %>% dplyr::select(-overOne_2) %>% distinct()
+riskDF$blockNum = as.character(riskDF$blockNum)
+outcomeDF = imputeDF %>% filter(tested) %>%
+  group_by(blockNum) %>% mutate(meanOutcome = mean(as.numeric(overOne_2)),
+                                meanOutcome = ifelse(meanOutcome>=0.5,TRUE,FALSE)) %>% 
+  ungroup() %>% distinct(blockNum,.keep_all=T)
+imputeDF2$blockNum = as.character(imputeDF2$blockNum)
+rarDF = imputeDF2 %>% left_join(riskDF,by=c("blockNum"="blockNum"))
+outcomeTestsDF = imputeDF %>% filter(tested)
 ```
 
-
+Outcome variable - meanOutcome
+- Used these features (prenterOccupiedHousing / foreign born / speaking other languages)
 ```{r}
-
-
+model1 = glm(meanOutcome ~ speakOtherLanguagesPropBG + pRenterOccupiedHousesBG + foreignBornPropBG, data = outcomeDF, family = binomial) %>%summary()
+model1
 ```
 
+Variations of SOLP/FBP
+```{r}
+model2 = glm(meanOutcome ~ speakOtherLanguagesPropBG + povertyPropBG + foreignBornPropBG, data = outcomeDF, family = binomial) %>%summary()
+model2
+```
 
+```{r}
+model2a = glm(meanOutcome ~ speakOtherLanguagesPropBG + povertyPropBG + educationGEDPropBG, data = outcomeDF, family = binomial) %>%summary()
+model2a
+```
 
+```{r}
+model2b = glm(meanOutcome ~ speakOtherLanguagesPropBG + povertyPropBG + educationHSPropBG, data = outcomeDF, family = binomial) %>%summary()
+model2b
+```
 
+```{r}
+model2d = glm(meanOutcome ~ speakOtherLanguagesPropBG + povertyPropBG + educationBachelorsPropBG, data = outcomeDF, family = binomial) %>%summary()
+model2d
+```
 
+```{r}
+model3 = glm(meanOutcome ~ speakOtherLanguagesPropBG + pRenterOccupiedHousesBG + educationBachelorsPropBG, data = outcomeDF, family = binomial) %>%summary()
+model3
+```
+
+```{r}
+model4 = glm(meanOutcome ~ speakOtherLanguagesPropBG + pRenterOccupiedHousesBG + educationGEDPropBG, data = outcomeDF, family = binomial) %>%summary()
+model4
+```
+
+education only: Looked to see how changes in education influences meanoutcome
+This one uses meanOutcome with blocks as observations
+```{r}
+outcomehs <- glm(meanOutcome~educationHSPropBG,data=outcomeDF,family="binomial") %>% summary()
+outcomege <- glm(meanOutcome~educationGEDPropBG,data=outcomeDF,family="binomial") %>% summary()
+outcomeaa <- glm(meanOutcome~educationAssociatesPropBG,data=outcomeDF,family="binomial") %>% summary()
+outcomebs <- glm(meanOutcome~educationBachelorsPropBG,data=outcomeDF,family="binomial") %>% summary()
+outcomems <- glm(meanOutcome~educationMastersPropBG,data=outcomeDF,family="binomial") %>% summary()
+outcomedr = glm(meanOutcome~educationDoctoratePropBG,data=outcomeDF,family="binomial") %>% summary()
+
+outcomege
+outcomehs
+outcomeaa
+outcomebs
+outcomems
+outcomedr
+```
+
+risk adjusted regressions - 
+SOLP/FBP + preds
+```{r}
+rartst1 = glm(tested ~ speakOtherLanguagesPropBG + pRenterOccupiedHousesBG + foreignBornPropBG + preds, data = rarDF, family = binomial) %>%summary()
+rartst1
+```
+
+```{r}
+rartst2 = glm(tested ~pRenterOccupiedHousesBG + foreignBornPropBG + preds, data = rarDF, family = binomial) %>%summary()
+rartst2
+```
+
+tested ~ education + preds
+```{r}
+rarhs = glm(tested~educationHSPropBG + preds,data=rarDF,family="binomial") %>% summary()
+rarge = glm(tested~educationGEDPropBG + preds,data=rarDF,family="binomial") %>% summary()
+raraa = glm(tested~educationAssociatesPropBG + preds,data=rarDF,family="binomial") %>% summary()
+rarbs = glm(tested~educationBachelorsPropBG + preds,data=rarDF,family="binomial") %>% summary()
+rarms = glm(tested~educationMastersPropBG + preds,data=rarDF,family="binomial") %>% summary()
+rardr = glm(tested ~educationDoctoratePropBG + preds, data =rarDF, family = "binomial") %>%summary()
+
+rarge
+rarhs
+raraa
+rarbs
+rarms
+rardr
+```
+
+outcome (overone_2) - 
+
+using tests as observations ~ education levels
+```{r}
+ouths_tst = glm(overOne_2~educationHSPropBG,data=outcomeTestsDF,family="binomial") %>% summary()
+outge_tst = glm(overOne_2~educationGEDPropBG,data=outcomeTestsDF,family="binomial") %>% summary()
+outaa_tst = glm(overOne_2~educationAssociatesPropBG,data=outcomeTestsDF,family="binomial") %>% summary()
+outbs_tst = glm(overOne_2~educationBachelorsPropBG,data=outcomeTestsDF,family="binomial") %>% summary()
+outms_tst = glm(overOne_2~educationMastersPropBG,data=outcomeTestsDF,family="binomial") %>% summary()
+outdr_tst = glm(overOne_2 ~educationDoctoratePropBG, data =outcomeTestsDF, family = "binomial") %>%summary()
+
+outge_tst
+ouths_tst
+outaa_tst
+outbs_tst
+outms_tst
+outdr_tst
+```
+
+SOLP/FBP
+```{r}
+over_model = glm(overOne_2 ~ speakOtherLanguagesPropBG + pRenterOccupiedHousesBG + foreignBornPropBG, data = outcomeTestsDF, family = binomial) %>%summary()
+over_model
+```
