@@ -501,11 +501,13 @@ for (var in housing_vars) {
 }
 ```
 
-Week 7+8: Outcome + Risk model on tested regression
+Week 7+8: Outcomes + Risk model (for 'tested' only) regression
 
 Outcome variable - meanOutcome
 - Used these features (prenterOccupiedHousing / foreign born / speaking other languages)
 - Also checked out education (masters, bachelors, hs, ged - each individually) against meanOutcome
+- Week 9: used blockPopulation as control 
+
 
 Risk adjusted regressions - tested (outcome)
 - Checked github and saw that preds were used from riskDF, so used preds + features mentioned above
@@ -546,7 +548,7 @@ imputeDF2 = imputeDF %>% select(blockPopulation,
                                  speakOtherLanguagesPropBG,pRenterOccupiedHousesBG, foreignBornPropBG,
                                              censusTract,blockNum,tested,overOne_2) %>%  distinct(blockNum,.keep_all=T)
 
-#riskDF = riskDF %>% dplyr::select(-overOne_2) %>% distinct()
+#riskDF = riskDF %>% select(-overOne_2) %>% distinct()
 riskDF$blockNum = as.character(riskDF$blockNum)
 outcomeDF = imputeDF %>% filter(tested) %>%
   group_by(blockNum) %>% mutate(meanOutcome = mean(as.numeric(overOne_2)),
@@ -564,105 +566,154 @@ model1 = glm(meanOutcome ~ speakOtherLanguagesPropBG + pRenterOccupiedHousesBG +
 model1
 ```
 
-Variations of SOLP/FBP
+Used blockPopulation as control variable
 ```{r}
-model2 = glm(meanOutcome ~ speakOtherLanguagesPropBG + povertyPropBG + foreignBornPropBG, data = outcomeDF, family = binomial) %>%summary()
-model2
+model_sol = glm(meanOutcome ~ speakOtherLanguagesPropBG + blockPopulation, data = outcomeDF, family = binomial) %>%summary()
+model_roh = glm(meanOutcome ~ pRenterOccupiedHousesBG + blockPopulation, data = outcomeDF, family = binomial) %>%summary()
+model_fb = glm(meanOutcome ~ foreignBornPropBG + blockPopulation, data = outcomeDF, family = binomial) %>%summary()
+
+model_sol
+model_roh
+model_fb
 ```
 
-```{r}
-model2a = glm(meanOutcome ~ speakOtherLanguagesPropBG + povertyPropBG + educationGEDPropBG, data = outcomeDF, family = binomial) %>%summary()
-model2a
-```
+Outcome Variable - Tested
 
 ```{r}
-model2b = glm(meanOutcome ~ speakOtherLanguagesPropBG + povertyPropBG + educationHSPropBG, data = outcomeDF, family = binomial) %>%summary()
-model2b
+tstsol = glm(tested ~ speakOtherLanguagesPropBG + blockPopulation, data = rarDF, family = binomial) %>%summary()
+tstroh = glm(tested ~ pRenterOccupiedHousesBG + blockPopulation, data = rarDF, family = binomial) %>%summary()
+tstfb = glm(tested ~ foreignBornPropBG + blockPopulation, data = rarDF, family = binomial) %>%summary()
+
+tstsol
+tstroh
+tstfb
 ```
 
+Risk adjusted regression - blockPopulation and Preds
 ```{r}
-model2d = glm(meanOutcome ~ speakOtherLanguagesPropBG + povertyPropBG + educationBachelorsPropBG, data = outcomeDF, family = binomial) %>%summary()
-model2d
+rartst_sol = glm(tested ~ speakOtherLanguagesPropBG + preds + blockPopulation, data = rarDF, family = binomial) %>%summary()
+rartst_roh = glm(tested ~ pRenterOccupiedHousesBG + preds + blockPopulation, data = rarDF, family = binomial) %>%summary()
+rartst_fb = glm(tested ~ foreignBornPropBG + preds + blockPopulation, data = rarDF, family = binomial) %>%summary()
+
+rartst_sol
+rartst_roh
+rartst_fb
 ```
 
+
+Week 8+ 9: 
+
+Ran regressions on meanOutcome + Tested 
+- used blockPopulation as control and preds for risk in both 
+- Tried to fix warning:
+  - tried scaling, still received the warning
+  - no large p-values or standard errors
+  - no large parameter values
+- Created a table for meanOutcome (blockPopulation)
+- Created two tables for tested 
+  - Table for just adjustment variable (blockPopulation)
+  - Table for risk adjusted regression (blockPopulation + preds)
+
+
+Ben Huynh Github - Creating Table + Function for GLMResults
 ```{r}
-model3 = glm(meanOutcome ~ speakOtherLanguagesPropBG + pRenterOccupiedHousesBG + educationBachelorsPropBG, data = outcomeDF, family = binomial) %>%summary()
-model3
+getGLMResults <- function(mod) {
+  c <- mod$coefficients[2]
+  std.err <- mod$coefficients[2,2]
+  CI <- (exp(std.err*qnorm(0.975))-1)*10
+  cExp <- (exp(c)-1)*10 #interpret as per 10% increase in pop, not 100%
+  upper <- cExp + CI
+  lower <- cExp - CI
+  pValue <- mod$coefficients[2,4]
+  rr <- sqrt(exp(c))
+  if(rr >= 1) {
+    EValue <- rr + sqrt(rr*(rr-1))
+  } else {
+    EValue <- (1/rr) + sqrt((1/rr)*((1/rr)-1))
+  }
+  return(round(c(c,std.err,cExp,lower,upper,pValue,EValue),2))
+}
+
+generateRegressionTable <- function(rarSolResults, rarRohResults, rarFBResults,
+                                    tstSolResults = NULL, tstRohResults = NULL, tstFbResults = NULL) {
+  
+  rarTable <- as.data.frame(rbind(rarSolResults, rarRohResults, rarFBResults))
+  colnames(rarTable) <- c("Coefficient", "Std. err", "Increase", "Lower", "Upper", "p", "E")
+  
+  rarTable$Increase <- paste0(rarTable$Increase, " (", rarTable$Lower, ",", rarTable$Upper, ")")
+  rarTable$Lower <- NULL
+  rarTable$Upper <- NULL
+  
+  outcomeTable <- data.frame()
+  
+  if (!is.null(tstSolResults) && !is.null(tstRohResults) && !is.null(tstFbResults)) {
+    outcomeTable <- as.data.frame(rbind(tstSolResults, tstRohResults, tstFbResults))
+    colnames(outcomeTable) <- c("Coefficient_O", "Std. err_O", "Increase_O", "Lower_O", "Upper_O", "p_O", "E_O")
+    
+    outcomeTable$Increase_O <- paste0(outcomeTable$Increase_O, " (", outcomeTable$Lower_O, ",", outcomeTable$Upper_O, ")")
+    outcomeTable$Lower_O <- NULL
+    outcomeTable$Upper_O <- NULL
+  }
+    if (nrow(outcomeTable) > 0) {
+    regTable <- cbind(rarTable, outcomeTable)
+  } else {
+    regTable <- rarTable
+  }
+  
+  regTable$p <- ifelse(regTable$p == 0, "<0.001", regTable$p)
+  if ("p_O" %in% colnames(regTable)) {
+    regTable$p_O <- ifelse(regTable$p_O == 0, "<0.001", regTable$p_O)
+  }
+  
+  return(regTable)
+}
+
 ```
 
+Mean Outcome results (model with blockPop)
 ```{r}
-model4 = glm(meanOutcome ~ speakOtherLanguagesPropBG + pRenterOccupiedHousesBG + educationGEDPropBG, data = outcomeDF, family = binomial) %>%summary()
-model4
+
+model_solResults <- getGLMResults(model_sol)
+model_solResults
+model_rohResults <- getGLMResults(model_roh)
+model_fbResults <- getGLMResults(model_fb)
+#regTable_mout
 ```
 
-education only: Looked to see how changes in education influences meanoutcome
-This one uses meanOutcome with blocks as observations
+Tested results (model with blockPop and rar with Preds+BlockPop)
 ```{r}
-outcomehs <- glm(meanOutcome~educationHSPropBG,data=outcomeDF,family="binomial") %>% summary()
-outcomege <- glm(meanOutcome~educationGEDPropBG,data=outcomeDF,family="binomial") %>% summary()
-outcomeaa <- glm(meanOutcome~educationAssociatesPropBG,data=outcomeDF,family="binomial") %>% summary()
-outcomebs <- glm(meanOutcome~educationBachelorsPropBG,data=outcomeDF,family="binomial") %>% summary()
-outcomems <- glm(meanOutcome~educationMastersPropBG,data=outcomeDF,family="binomial") %>% summary()
-outcomedr = glm(meanOutcome~educationDoctoratePropBG,data=outcomeDF,family="binomial") %>% summary()
 
-outcomege
-outcomehs
-outcomeaa
-outcomebs
-outcomems
-outcomedr
+tstsolResults <- getGLMResults(tstsol)
+tstrohResults <- getGLMResults(tstroh)
+tstfbResults <- getGLMResults(tstfb)
+
+rartst_solResults <- getGLMResults(rartst_sol)
+rartst_rohResults <- getGLMResults(rartst_roh)
+rartst_fbResults <- getGLMResults(rartst_fb)
+
 ```
 
-risk adjusted regressions - 
-SOLP/FBP + preds
+Tables
+
+Mean outcome
 ```{r}
-rartst1 = glm(tested ~ speakOtherLanguagesPropBG + pRenterOccupiedHousesBG + foreignBornPropBG + preds, data = rarDF, family = binomial) %>%summary()
-rartst1
+
+regTable_mout = generateRegressionTable(model_solResults, model_rohResults, model_fbResults)
+rownames(regTable_mout) = c('Speak Other Languages', "Renter Occupied Housing", "Foreign Born")
+regTable_mout
 ```
 
+Tested - Risk Adjusted Regression 
 ```{r}
-rartst2 = glm(tested ~pRenterOccupiedHousesBG + foreignBornPropBG + preds, data = rarDF, family = binomial) %>%summary()
-rartst2
+regTable_rartst = generateRegressionTable(rartst_solResults, rartst_rohResults, rartst_fbResults)
+rownames(regTable_rartst) = c('Speak Other Languages', "Renter Occupied Housing", "Foreign Born")
+regTable_rartst
 ```
 
-tested ~ education + preds
+Tested - regular
 ```{r}
-rarhs = glm(tested~educationHSPropBG + preds,data=rarDF,family="binomial") %>% summary()
-rarge = glm(tested~educationGEDPropBG + preds,data=rarDF,family="binomial") %>% summary()
-raraa = glm(tested~educationAssociatesPropBG + preds,data=rarDF,family="binomial") %>% summary()
-rarbs = glm(tested~educationBachelorsPropBG + preds,data=rarDF,family="binomial") %>% summary()
-rarms = glm(tested~educationMastersPropBG + preds,data=rarDF,family="binomial") %>% summary()
-rardr = glm(tested ~educationDoctoratePropBG + preds, data =rarDF, family = "binomial") %>%summary()
-
-rarge
-rarhs
-raraa
-rarbs
-rarms
-rardr
+regTable_tst = generateRegressionTable(tstsolResults, tstrohResults, tstfbResults)
+rownames(regTable_tst) = c('Speak Other Languages', "Renter Occupied Housing", "Foreign Born")
+regTable_tst
 ```
 
-outcome (overone_2) - 
-
-using tests as observations ~ education levels
-```{r}
-ouths_tst = glm(overOne_2~educationHSPropBG,data=outcomeTestsDF,family="binomial") %>% summary()
-outge_tst = glm(overOne_2~educationGEDPropBG,data=outcomeTestsDF,family="binomial") %>% summary()
-outaa_tst = glm(overOne_2~educationAssociatesPropBG,data=outcomeTestsDF,family="binomial") %>% summary()
-outbs_tst = glm(overOne_2~educationBachelorsPropBG,data=outcomeTestsDF,family="binomial") %>% summary()
-outms_tst = glm(overOne_2~educationMastersPropBG,data=outcomeTestsDF,family="binomial") %>% summary()
-outdr_tst = glm(overOne_2 ~educationDoctoratePropBG, data =outcomeTestsDF, family = "binomial") %>%summary()
-
-outge_tst
-ouths_tst
-outaa_tst
-outbs_tst
-outms_tst
-outdr_tst
-```
-
-SOLP/FBP
-```{r}
-over_model = glm(overOne_2 ~ speakOtherLanguagesPropBG + pRenterOccupiedHousesBG + foreignBornPropBG, data = outcomeTestsDF, family = binomial) %>%summary()
-over_model
-```
