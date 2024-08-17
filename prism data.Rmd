@@ -33,16 +33,6 @@ lead_copy
 ```{r}
 lead_copy$Date = lapply(lead_copy$Date.Sampled, as.Date)
 lead_copy$Date = as.Date(unlist(lead_copy$Date))
-
-distinct(lead_copy)
-```
-
-prism download
-```{r}
-#for (dt in lead_copy$Date) {
-#    get_prism_dailys(type = "tmax", dates = dt)
-#}
-
 ```
 
 creating table + merging 
@@ -94,23 +84,23 @@ ggplot(merged_mx, aes(x = Date.Sampled, y = tmax)) +
 ```
 
 ```{r}
-# Outliers Included
-draw_temp_1 = ggplot(merged_mx, aes(x = log(tmax), y = X1st.Draw)) +
+# Outlier's Included
+draw_temp_1 = ggplot(merged_mx, aes(x = tmax, y = X1st.Draw)) +
   geom_point() +
   labs(title = "Temperature vs 1st Draw Lead Concentration",
-       x = "Log Average Temperature (°C)",
+       x = "Average Temperature (°C)",
        y = "1st Draw Lead Concentration")
 
-draw_temp_23 = ggplot(merged_mx, aes(x = log(tmax), y = X2.3.Minute)) +
+draw_temp_23 = ggplot(merged_mx, aes(x = tmax, y = X2.3.Minute)) +
   geom_point() +
   labs(title = "Temperature vs 2nd Draw Lead Concentration",
-       x = "Log Average Temperature (°C)",
+       x = "Average Temperature (°C)",
        y = "2nd Draw Lead Concentration After 2-3 Minutes")
 
-draw_temp_5 = ggplot(merged_mx, aes(x = log(tmax), y = X5.Minute)) +
+draw_temp_5 = ggplot(merged_mx, aes(x = tmax, y = X5.Minute)) +
   geom_point() +
   labs(title = "Temperature vs 3rd Draw Lead Concentration",
-       x = "Log Average Temperature (°C)",
+       x = "Average Temperature (°C)",
        y = "3rd Draw Lead Concentration After 5 Minutes")
 
 
@@ -131,27 +121,54 @@ orm2 = function(df, column) {
 }
 ```
 
-lead vs temp graphs
 ```{r}
+# Outlier's Excluded - non-log graphs
 draw1_noouts = orm2(merged_mx, "X1st.Draw")
 draw2_noouts = orm2(merged_mx, "X2.3.Minute")
 draw3_noouts = orm2(merged_mx, "X5.Minute")
 
+draw_temp_1_nl = ggplot(draw1_noouts, aes(x = tmax, y = X1st.Draw)) +
+  geom_point() +
+  labs(title = "Temperature vs 1st Draw Lead Concentration",
+       x = "Average Temperature (°C)",
+       y = "1st Draw Lead Concentration")
+
+draw_temp_23_nl = ggplot(draw2_noouts, aes(x = tmax, y = X2.3.Minute)) +
+  geom_point() +
+  labs(title = "Temperature vs 2nd Draw Lead Concentration",
+       x = "Average Temperature (°C)",
+       y = "2nd Draw Lead Concentration After 2-3 Minutes")
+
+draw_temp_5_nl = ggplot(draw3_noouts, aes(x = tmax, y = X5.Minute)) +
+  geom_point() +
+  labs(title = "Temperature vs 3rd Draw Lead Concentration",
+       x = "Average Temperature (°C)",
+       y = "3rd Draw Lead Concentration After 5 Minutes")
+
+
+draw_temp_1_nl
+draw_temp_23_nl
+draw_temp_5_nl
+```
+
+lead vs temp graphs
+```{r}
+#Outlier's excluded - log graphs
 g_draw1 =  ggplot(draw1_noouts, aes(x = log(tmax), y = X1st.Draw)) +
   geom_point(alpha = .5) +
-  labs(title = "Temperature vs 1st Draw Lead Concentration (No Outliers)",
+  labs(title = "Temperature vs 1st Draw Lead Concentration (Removed Upper Quartile Outliers)",
        x = "Log Average Temperature (°C)",
        y = "1st Draw Lead Concentration")
 
 g_draw23 = ggplot(draw2_noouts, aes(x = log(tmax), y = X2.3.Minute)) +
   geom_point(alpha = .5) +
-  labs(title = "Temperature vs 2nd Draw Lead Concentration (No Outliers)",
+  labs(title = "Temperature vs 2nd Draw Lead Concentration (Removed Upper Quartile Outliers)",
        x = "Log Average Temperature (°C)",
        y = "2nd Draw Lead Concentration After 2-3 Minutes")
 
 g_draw5 = ggplot(draw3_noouts, aes(x = log(tmax), y = X5.Minute)) +
   geom_point(alpha = .5) +
-  labs(title = "Temperature vs 3rd Draw Lead Concentration (No Outliers)",
+  labs(title = "Temperature vs 3rd Draw Lead Concentration (Removed Upper Quartile Outliers)",
        x = "Log Average Temperature (°C)",
        y = "3rd Draw Lead Concentration After 5 Minutes")
 
@@ -160,70 +177,45 @@ g_draw23
 g_draw5
 ```
 
-LM
+Linear Models using temperature and communities areas on flush
 ```{r}
-summary(lm(X1st.Draw ~ tmax, data = merged_mx))
+summary(lm(X1st.Draw ~ tmax + as.factor(CA), data = merged_mx))
 
-summary(lm(X1st.Draw ~ CA, data = merged_mx))
+summary(lm(X1st.Draw ~ tmax, data = merged_mx))
 ```
 
 ```{r}
-summary(lm(X2.3.Minute ~ tmax, data = merged_mx))
+summary(lm(X2.3.Minute ~ tmax + as.factor(CA), data = merged_mx))
 
 summary(lm(X2.3.Minute ~ CA, data = merged_mx))
 ```
 
 ```{r}
-summary(lm(X5.Minute ~ tmax, data = merged_mx))
+summary(lm(X5.Minute ~ tmax + as.factor(CA), data = merged_mx))
 
 summary(lm(X5.Minute ~ CA, data = merged_mx))
 ```
 
-GAM MD + GRAPHS (Week 4)
-```{r}
-lm_ca_mx = lm(X1st.Draw ~ as.factor(CA) + tmax, data = merged_mx)
-summary(lm_ca_mx)
-plot(lm_ca_mx)
-```
-
-```{r}
-merged_mx
-```
+GAM Models and graphs using temperature and community area on flush (Week 4)
 
 ```{r}
 mod_gam1 = gam(X1st.Draw ~ as.factor(CA) + s(tmax), data = merged_mx)
 summary(mod_gam1)
-plot(ggeffects::ggpredict(mod_gam1), facets = TRUE)
 gratia::draw(mod_gam1)
 ```
-tmax seem to have a linear, positive effect, but tmax is not significant (smoothed or not). 
-and CA seems to have a nonlinear effect, significant at a 0.05 level.
 
 ```{r}
-mod_gam2 = gam(X1st.Draw ~ CA + s(tmax, bs = "cr"), data = merged_mx)
+mod_gam3 = gam(X2.3.Minute ~ as.factor(CA) + s(tmax), data = merged_mx)
+summary(mod_gam3)
+gratia::draw(mod_gam3)
+```
+```{r}
+mod_gam2 = gam(X5.Minute ~ s(tmax) + as.factor(CA), data = merged_mx)
 summary(mod_gam2)
-plot(ggeffects::ggpredict(mod_gam2), facets = TRUE)
 gratia::draw(mod_gam2)
-```
-tmax and CA both seem to have a linear, positive effect, but tmax is not significant (smoothed or not), but while CA is significant at 0.1
-
-```{r}
-mod_gam3 = gam(X1st.Draw ~ s(CA) + tmax, data = merged_mx)
-summary(mod_gam3)
-plot(ggeffects::ggpredict(mod_gam3), facets = TRUE)
-gratia::draw(mod_gam3)
-```
-
-```{r}
-mod_gam3 = gam(X1st.Draw ~ CA + s(tmax) + te(CA,tmax), data = merged_mx)
-summary(mod_gam3)
-plot(ggeffects::ggpredict(mod_gam3), facets = TRUE)
-gratia::draw(mod_gam3)
 ```
 
 Log regression + look into subtopics (Week 5)
-
-log_temp
 ```{r}
 #took the log of tmax after adding  a constant (min of temp + 1) to each row
 merged_mx$log_temp = log(abs(min(merged_mx$tmax)) + merged_mx$tmax + 1)
@@ -239,287 +231,19 @@ regression
 log_model = glm(lead_presence ~ as.factor(CA) + log_temp, data = merged_mx, family = binomial)
 
 summary(log_model)
-```
 
-```{r}
-merged_mx_cp = merged_mx %>% mutate(predicted_prob = predict(log_model, type = "response"))
-
-ggplot(merged_mx_cp, aes(x = log_temp, y = predicted_prob)) +
-  geom_point(alpha = 0.5) +
-  labs(title = "Predicted Probabilities vs. Log Temperature",
-       x = "Log Temperature",
-       y = "Predicted Probability of Lead Presence")
-```
-
-```{r}
-roc_curve = roc(merged_mx_cp$lead_presence, merged_mx_cp$predicted_prob)
-print(paste("AUC Score:", auc(roc_curve)))
-
-plot(roc_curve, main = "ROC Curve", col = "blue")
+non_significant = summary(log_model)$coefficients[summary(log_model)$coefficients[, "Pr(>|z|)"] > 0.05, ]
+print(non_significant)
 ```
 
 
-Subtopic: Neighborhood characteristics for lead exposure
-
-```{r}
-#tidycensus for neighborhood data
-census_api_key('363eac25d9e97f2a3af1f84447e1150440c95219',install = TRUE)
-```
-
-```{r}
-merged_mx
-#look at all CAs where lead presense is 1 - log regression?
-```
-
-Census tract data (ACS)
-```{r}
-
-var_n = c(
-  speaks_only_english = 'B16001_002',
-  foreign_born_population = 'B05001_005',
-  median_home_value = 'B25077_001',
-  total_population_25_over = 'B15003_001',
-  high_school_graduate = 'B15003_017',
-  bachelors_degree = 'B15003_021',
-  masters_degree = 'B15003_022',
-  professional_school_degree = 'B15003_023',
-  doctorate_degree = 'B15003_024'
-)
-
-unique_tracts = unique(merged_mx$CensusTract)
-all_acs_data = data.frame()
-
-for (year in 2016:2022) {
-  acs_data =
-    get_acs(
-      geography = "tract",
-      variables = var_n,
-      state = "IL",
-      county = "Cook",
-      year = year,
-      survey = "acs5"
-    )
-  
-  if (!is.null(acs_data)) {
-    acs_data <- acs_data %>%
-      filter(GEOID %in% unique_tracts) %>%
-      mutate(year = year)
-    
-    all_acs_data =  bind_rows(all_acs_data, acs_data)
-  }
-}
-
-#all_acs_data_wide = all_acs_data %>%
-#  tidyr::pivot_wider(names_from = variable, values_from = estimate)
-#all_acs_data_wide
-all_acs_data_combined = all_acs_data_wide %>%
-  group_by(GEOID, NAME, year) %>%
-  summarize(across(everything(), ~max(.x,na.rm = TRUE)), .groups = 'drop')
-all_acs_data_combined
-```
-
-```{r}
-merged_mx$year = format(as.Date(merged_mx$Date, format="%d/%m/%Y"),"%Y")
-```
-
-
-```{r}
-mx_cen = merge(merged_mx, all_acs_data_combined, by.x = c('CensusTract', 'year'), by.y = c('GEOID', 'year')) # missing 2023
-
-#37739
-mx_cen_ss = subset(mx_cen, select = -c(NAME, speaks_only_english))
-
-sum(merged_mx$year == 2023)
-mx_cen_ss
-```
-
-Week 6 and 5: Continuation of Neighborhood
+Week 5 + 6: Continuation of Neighborhood
 ```{r}
 imputeDF = read.csv('/Users/osinachinwosu/Desktop/imputeDF.csv')
 imputeDF
 ```
-```{r}
-impute_merged = merge(merged_mx, imputeDF, by.x = c('CensusTract', 'CA', 'Date.Sampled','X1st.Draw','X2.3.Minute','X5.Minute'), by.y = c('censusTract', 'CA','Date.Sampled','X1st.Draw','X2.3.Minute','X5.Minute'))
 
-impute_merged = distinct(impute_merged)
-summary(impute_merged)
-```
-
-
-lOG MODEL - tested outcome (scrapped - used lasso instead)
-
-```{r}
-
-mod1 = glm(tested ~ speakOtherLanguagesPropBG + foreignBornPropBG + educationGEDPropBG + educationSomeCollegeLess1PropBG + educationSomeCollegeMore1PropBG
- + educationAssociatesPropBG + educationBachelorsPropBG + educationMastersPropBG + educationPrfsnlSchoolPropBG + educationDoctoratePropBG, data = imputeDF, family = binomial)
-
-summary(mod1)
-vif(mod1)
-```
-
-```{r}
-mod2 = glm(tested ~ nativeBornPropBG + speakOtherLanguagesPropBG + houseValueMedianBG + educationGEDPropBG + educationSomeCollegeLess1PropBG + educationSomeCollegeMore1PropBG
- + educationAssociatesPropBG + educationBachelorsPropBG + educationMastersPropBG + educationPrfsnlSchoolPropBG + educationDoctoratePropBG, data = imputeDF, family = binomial)
-
-summary(mod2)
-vif(mod2)
-```
-
-```{r}
-mod3 = glm(lead_presence ~ pLackingCompletePlumbingBG + speakOtherLanguagesPropBG + houseValueMedianBG, data = impute_merged, family = binomial)
-
-summary(mod3)
-```
-
-```{r}
-mod4 = glm(tested ~ pLackingCompletePlumbingBG + speakOtherLanguagesPropBG + houseValueMedianBG + educationBachelorsPropBG, data = imputeDF, family = binomial)
-
-summary(mod4)
-vif(mod4)
-```
-
-```{r}
-mod5 = glm(lead_presence ~ pLackingCompletePlumbingBG, data = impute_merged, family = binomial)
-summary(mod5)
-```
-
-```{r}
-mod6 = glm(tested ~ speakOtherLanguagesPropBG, data = imputeDF, family = binomial)
-
-summary(mod6)
-```
-
-```{r}
-mod7 = glm(tested ~ speakOtherLanguagesPropBG + houseValueMedianBG, data = imputeDF, family = binomial)
-
-summary(mod7)
-```
-
-Week 6 + 7: Lasso for Variables
-```{r}
-library(glmnet)
-
-num_col = sapply(imputeDF, is.numeric)
-numdata = imputeDF[, num_col]
-numdata[is.na(numdata)] = 0 
-
-X = as.matrix(numdata)
-y = imputeDF$tested
-
-lasso_model = cv.glmnet(X, y, family = "binomial", alpha = 1)
-
-best_lambda = lasso_model$lambda.min
-
-final_model = glmnet(X, y, family = "binomial", alpha = 1, lambda = best_lambda)
-
-lasso_coefficients = coef(final_model)
-
-lasso_df = as.data.frame(as.matrix(lasso_coefficients))
-colnames(lasso_df) = c("Coefficient")
-
-sig_vars = lasso_df[lasso_df$Coefficient != 0, , drop = FALSE]
-sig_vars$Variable = rownames(sig_vars)
-sig_vars = sig_vars[order(abs(sig_vars$Coefficient), decreasing = TRUE), ]
-```
-
-After lasso,from imputeDF, i took variables that had to do with race, education, and housing
-
-race_vars = c("propWhiteBlockPop", "propAsianBlockPop", "propBlackBlockPop", 
-               "propHispanicBlockPop", "propAianBlockPop", "aianPropBG", 
-               "blackPropBG", "whitePropBG", "asianPropBG", "hispanicPropBG")
-
-education_vars = c("educationDoctoratePropBG", "educationPrfsnlSchoolPropBG", 
-                    "educationSomeCollegeLess1PropBG", "educationMastersPropBG", 
-                    "educationAssociatesPropBG", "educationHSPropBG", 
-                    "educationSomeCollegeMore1PropBG", "educationBachelorsPropBG", 
-                    "educationGEDPropBG")
-
-housing_vars = c("pRenterOccupiedHousesBG", "pOwnerOccupiedHousesBG", 
-                  "pLackingCompletePlumbingBG", "pVacantHousesBG", 
-                  "pCompletePlumbingFacilitiesBG", "medianBuildingAgeBG", 
-                  "numHousingUnitsBG", "houseValueLowerQBG", "houseValueUpperQBG", 
-                  "houseValueMedianBG", "pOccupiedHousesBG")
-                  
-RACE
-```{r}
-race_vars = c("propWhiteBlockPop", "propAsianBlockPop", "propBlackBlockPop", 
-               "propHispanicBlockPop", "propAianBlockPop")
-
-log_reg_func = function(data, vars, outcome) {
-  funcy_funct = as.formula(paste(outcome, "~", paste(vars, collapse = " + ")))
-  mod_log_fun = glm(funcy_funct, data = data, family = binomial)
-  summary(mod_log_fun)
-}
-
-for (var in race_vars) {
-  cat("Log Regression Summary for", var, ":\n")
-  print(log_reg_func(imputeDF, var, "tested"))
-  cat("\n\n")
-}
-```
-
-Education
-```{r}
-education_vars = c("educationDoctoratePropBG", "educationPrfsnlSchoolPropBG", 
-                    "educationSomeCollegeLess1PropBG", "educationMastersPropBG", 
-                    "educationAssociatesPropBG", "educationHSPropBG", 
-                    "educationSomeCollegeMore1PropBG", "educationBachelorsPropBG", 
-                    "educationGEDPropBG")
-
-log_reg_func = function(data, vars, outcome) {
-  funcy_funct = as.formula(paste(outcome, "~", paste(vars, collapse = " + ")))
-  mod_log_fun = glm(funcy_funct, data = data, family = binomial)
-  summary(mod_log_fun)
-}
-
-for (var in education_vars) {
-  cat("Log Regression Summary for", var, ":\n")
-  print(log_reg_func(imputeDF, var, "tested"))
-  cat("\n")
-}
-```
-doctoral and ged
-
-Housing
-```{r}
-housing_vars = c("pRenterOccupiedHousesBG", "pOwnerOccupiedHousesBG", 
-                  "pLackingCompletePlumbingBG", "pVacantHousesBG", 
-                  "pCompletePlumbingFacilitiesBG", "medianBuildingAgeBG", 
-                  "numHousingUnitsBG", "houseValueLowerQBG", "houseValueUpperQBG", 
-                  "houseValueMedianBG", "pOccupiedHousesBG")
-
-log_reg_func = function(data, vars, outcome) {
-  funcy_funct = as.formula(paste(outcome, "~", paste(vars, collapse = " + ")))
-  mod_log_fun = glm(funcy_funct, data = data, family = binomial)
-  summary(mod_log_fun)
-}
-
-for (var in housing_vars) {
-  cat("Log Regression Summary for", var, ":\n")
-  print(log_reg_func(imputeDF, var, "tested"))
-  cat("\n")
-}
-```
-
-Week 7+8: Outcomes + Risk model (for 'tested' only) regression
-
-Outcome variable - meanOutcome
-- Used these features (prenterOccupiedHousing / foreign born / speaking other languages)
-- Also checked out education (masters, bachelors, hs, ged - each individually) against meanOutcome
-- Week 9: used blockPopulation as control 
-
-
-Risk adjusted regressions - tested (outcome)
-- Checked github and saw that preds were used from riskDF, so used preds + features mentioned above
-- Also saw how education seems to influence the tested outcome 
-
-Outcome variable - OverOne_2 
-- Also used tests as observations (as in github), but looked only at differences in education levels
-
-From all:
-- As education levels increase, their coefficients for 'tested' and 'meanOutcome' decreases
-- Both the foreignbornprop (FBP) and renteroccupiedhouses (ROH) have decreasing coefficients for outcomes (meanOutcomes and overOne_2), increasing for (tested)
-
+Week 7+8:
 
 BenHuynh github
 ```{r}
@@ -560,11 +284,6 @@ outcomeTestsDF = imputeDF %>% filter(tested)
 ```
 
 Outcome variable - meanOutcome
-- Used these features (prenterOccupiedHousing / foreign born / speaking other languages)
-```{r}
-model1 = glm(meanOutcome ~ speakOtherLanguagesPropBG + pRenterOccupiedHousesBG + foreignBornPropBG, data = outcomeDF, family = binomial) %>%summary()
-model1
-```
 
 Used blockPopulation as control variable
 ```{r}
@@ -578,7 +297,6 @@ model_fb
 ```
 
 Outcome Variable - Tested
-
 ```{r}
 tstsol = glm(tested ~ speakOtherLanguagesPropBG + blockPopulation, data = rarDF, family = binomial) %>%summary()
 tstroh = glm(tested ~ pRenterOccupiedHousesBG + blockPopulation, data = rarDF, family = binomial) %>%summary()
@@ -589,7 +307,7 @@ tstroh
 tstfb
 ```
 
-Risk adjusted regression - blockPopulation and Preds
+Risk adjusted regression (TESTED) - blockPopulation and Preds
 ```{r}
 rartst_sol = glm(tested ~ speakOtherLanguagesPropBG + preds + blockPopulation, data = rarDF, family = binomial) %>%summary()
 rartst_roh = glm(tested ~ pRenterOccupiedHousesBG + preds + blockPopulation, data = rarDF, family = binomial) %>%summary()
@@ -600,19 +318,7 @@ rartst_roh
 rartst_fb
 ```
 
-
-Week 8+ 9: 
-
-Ran regressions on meanOutcome + Tested 
-- used blockPopulation as control and preds for risk in both 
-- Tried to fix warning:
-  - tried scaling, still received the warning
-  - no large p-values or standard errors
-  - no large parameter values
-- Created a table for meanOutcome (blockPopulation)
-- Created two tables for tested 
-  - Table for just adjustment variable (blockPopulation)
-  - Table for risk adjusted regression (blockPopulation + preds)
+Week 8+ 9:
 
 
 Ben Huynh Github - Creating Table + Function for GLMResults
@@ -672,15 +378,12 @@ generateRegressionTable <- function(rarSolResults, rarRohResults, rarFBResults,
 
 Mean Outcome results (model with blockPop)
 ```{r}
-
 model_solResults <- getGLMResults(model_sol)
-model_solResults
 model_rohResults <- getGLMResults(model_roh)
 model_fbResults <- getGLMResults(model_fb)
-#regTable_mout
 ```
 
-Tested results (model with blockPop and rar with Preds+BlockPop)
+Tested results (model with blockPop and RAR with Preds+BlockPop)
 ```{r}
 
 tstsolResults <- getGLMResults(tstsol)
@@ -693,7 +396,7 @@ rartst_fbResults <- getGLMResults(rartst_fb)
 
 ```
 
-Tables
+**Tables**
 
 Mean outcome
 ```{r}
@@ -703,17 +406,105 @@ rownames(regTable_mout) = c('Speak Other Languages', "Renter Occupied Housing", 
 regTable_mout
 ```
 
-Tested - Risk Adjusted Regression 
+Tested - Risk Adjusted Regression
+
 ```{r}
 regTable_rartst = generateRegressionTable(rartst_solResults, rartst_rohResults, rartst_fbResults)
 rownames(regTable_rartst) = c('Speak Other Languages', "Renter Occupied Housing", "Foreign Born")
 regTable_rartst
 ```
 
-Tested - regular
+Tested - Only with adjustment variable
+
 ```{r}
 regTable_tst = generateRegressionTable(tstsolResults, tstrohResults, tstfbResults)
 rownames(regTable_tst) = c('Speak Other Languages', "Renter Occupied Housing", "Foreign Born")
 regTable_tst
 ```
+
+Interpretations:
+**Week 4: Ran Generalized Additive Models to learn if there is a nonlinear relationship between temperature, community area, and lead presence.**
+Within the GAM model, the temperature was smoothed to help capture any complex, nonlinear effect on lead presence and community area was treated as a factor without smoothing to account for area-specific characteristics.
+
+Results (Temp in Celcius):
+Draw 1: CA’s (71,53,50,46,23,13,11) are significant – gam(X2.3.Minute ~ as.factor(CA) + s(tmax))
+
+Draw 2 (2-3 Minutes): CA’s (51, 23) are significant – gam(X2.3.Minute ~ as.factor(CA) + s(tmax))
+
+Draw 3 (5 Minutes): CA ( 23) is significant – gam(X2.3.Minute ~ as.factor(CA) + s(tmax))
+
+Within all three GAM models, the relationships are not strongly nonlinear, as we see a linear increase in lead presence with increasing temperature. The confidence intervals show that the effect is most precise in the middle-temperature range and less certain at the extremes. The positive slope indicates that as maximum temperature increases, the partial effect of temperature on the likelihood of lead presence also slightly increases.
+We also observe that as the flush time increases, the number of community areas with lead presence decreases, suggesting a relationship between community areas and lead presence. This is supported by the work done in Week 5, where another regression was performed using the logarithm of temperature instead because the logarithmic transformation of temperature may help clarify the relationship.
+
+
+**Week 5: Completing a regression given the outcome being the presence of lead**
+Predictor 1: Log of max temperature
+Predictor 2: Community Area
+Call: glm(formula = lead_presence ~ as.factor(CA) + log_temp, family = binomial,  data = merged_mx)
+**Results:**
+*Community Areas (CA):* Out of the 77 Community Areas, only Hyde Park (44), Kenwood (39), Oakland (36), Armour Square (34), West Town (24), and Lincoln Park (7) do not show a significant association with lead presence. This suggests that lead presence may be linked to specific community areas, possibly reflecting geographical or infrastructural factors affecting lead contamination.
+*Temperature (log_temp):* The log of temperature in the GLM model is statistically significant, indicating a logarithmic relationship with lead presence. In contrast, the GAM model from Week 4 showed a modest linear relationship between temperature and lead presence, suggesting a consistent increase in lead presence with rising temperatures. Given that the amount of lead released into water increases as temperature rises, the GAM model’s linear relationship is more consistent with this understanding. This linear trend suggests that as temperature increases, lead presence also increases, aligning with the physical process where higher temperatures enhance lead leaching from pipes into the water.
+
+
+Data was gathered from the tidyrCensus ACS, focusing on variables such as median home value, educational attainment, and housing composition for the years 2016-2022. This data was merged with lead presence records at the census tract level to create a comprehensive dataset.
+
+**Outcome Variables considered:** Tested, meanOutcome
+*Tested:* Whether or not the block had at least one test for lead.
+*meanOutcome:* Represents whether the average lead level detected after a 2-3 minute flush within a specific block group is high enough that at least 50% of the tested samples have lead levels of 1ppb or higher.
+
+*Adjustment variable:* Block Population
+A good adjustment (control) variable because it accounts for the size of the population within each block, which can influence test conduction and the mean outcome. Adjusting for block population helps to control for these differences, ensuring that the analysis more accurately reflects the relationships between other variables (like socioeconomic factors) and lead presence.
+
+*Risk adjusted regression:* Only on Tested
+Risk-adjusted regression (using adjustment variable + predicted) allows for controlling confounding variables when assessing the relationship between a predictor and an outcome. By adjusting for risk, the model accounts for the influence of other variables that could affect the results.
+
+
+**Tested (adjustment variable - blockPop): This outcome suggests that the block had at least one test for lead.** 
+When considering whether individuals were tested for lead, with block population as a control variable, the coefficients for all three predictors—Speak Other Languages, Renter Occupied Housing, and Foreign Born—are negative. This indicates that as the value of each predictor increases, such as a higher proportion of renter-occupied housing, an increase in people who speak languages other than English, or a rise in the foreign-born population within a block, the likelihood of having had at least one lead test decreases. The precision of these coefficient estimates is supported by the small standard error values (0.04, 0.06), indicating a high degree of accuracy in the estimated effects. Specifically, the "Increase" values show that for each percent increase in these variables, the probability of getting tested for lead decreases by approximately 6% for those who speak other languages, 8.01% for those living in renter-occupied housing, and 6.4% for foreign-born individuals.
+
+The E values for the predictors—Speak Other Languages (2.54), Renter Occupied Housing (3.91), and Foreign Born (2.72)—indicate both the strength a confounder needs to have to explain away the association of predictor and outcom while also measuring the impact on the effect of each variable to the outcome. Renter Occupied Housing has the strongest impact, with the most negative effect, suggesting that areas with higher proportions of renters are significantly less likely to have tested for lead. Speak Other Languages and Foreign Born both have moderate impact effects, meaning that as the proportion of non-English speakers or foreign-born individuals increases, the likelihood of lead testing decreases.
+
+
+**Tested (risk adjusted): This outcome suggests that the block had at least one test for lead.**
+
+In the risk-adjusted regression analysis, the predictors Speak Other Languages, Renter Occupied Housing, and Foreign Born all negatively affect the likelihood of lead testing. Renter Renter-occupied housing showed the strongest impact, with an 8.11% decrease in testing likelihood per 1% increase in renter-occupied housing, as noted by its largest "E" value of 4.03. 
+
+The predictors "Speak Other Languages" and "Foreign Born" also showed significant, but moderate impact A 1% increase in the proportion of individuals who speak languages other than English is associated with a 6.58% decrease in the likelihood of lead testing, with an E-value of 2.81. Similarly, a 1% increase in the proportion of foreign-born residents corresponds to a 6.87% decrease in testing likelihood, with an E-value of 2.97. These E-values indicate that a confounder would need to be associated with the predictor and the outcome by a factor of 2.81 and 2.97, respectively, to completely explain these associations.
+
+These findings suggest that language barriers, rental housing, and immigrant status significantly reduce access to lead testing, highlighting important public health disparities.
+
+
+**Mean outcome (adjustment variable - blockPop): This outcome suggests that the block had at least one test for lead.**
+The meanOutcome variable represents whether the average lead level detected after a 2-3 minute flush within a specific block group is high enough that at least 50% of the tested samples have lead levels of 1ppb or higher.
+
+Adding block population as an adjustment variable helps control for confounding factors, such as variability in languages spoken, the type of individuals occupying the space, and immigrant status, which could independently influence lead levels. Accounting for differences in population size ensures that the effects of other variables on the outcome are not biased.
+
+The analysis indicates that a 1% increase in the proportion of people who speak languages other than English within a block group is associated with a 15.12% higher likelihood that the mean lead level after a 2-3 minute flush exceeds 1 part per billion (ppb). Similarly, a 1% increase in the proportion of foreign-born residents corresponds to a 13.11% higher probability of exceeding this lead threshold. These findings suggest a moderate impact, with E-values of 2.55 and 2.41, respectively, implying that an unmeasured confounder would need to be associated with both (language or immigrant status) and lead levels by a factor of 2.55 or 2.41, respectively, to explain away these associations.
+
+In contrast, a 1% increase in the proportion of renter-occupied housing is linked to a 9.15% decrease in the likelihood of high lead levels. The significant E-value of 6.34 indicates that a confounder would need to be associated with both renter-occupied housing and lead levels at a factor of 6.34 to negate this observed effect.
+
+The observation that areas with a higher proportion of renter-occupied housing are linked to lower lead levels and a reduced likelihood of testing suggests a complicated relationship between housing conditions and public health practices. While these areas may have less lead contamination, possibly due to better maintenance or newer infrastructure, the reduced amount of testing is concerning potential lead risks. This gap highlights the need for targeted public health interventions to ensure that even in lower-risk areas, lead levels are consistently monitored and tenants are aware of their rights to safe housing.
+
+
+**Where do we go from here**
+Enhance Community Engagement
+- Partner with local organizations to raise awareness and promote lead testing especially within blocks where people speak another language, rent, or have higher proportions of immigrants.
+- Involve affected communities in the design and implementation of interventions to ensure they are culturally relevant and effective.
+
+Further Analysis of Data
+- Investigate probable nonlinear relationships and interactions between variables like income and housing for the varying outcome variables.
+- Include more socioeconomic data to better understand the features influencing lead exposure.
+
+
+
+
+
+
+
+
+
+
+
+
+
 
